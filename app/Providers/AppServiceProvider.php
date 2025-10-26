@@ -12,7 +12,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->singleton(RequestTracker::class);
+        // Bind as scoped, not singleton
+        // This ensures each HTTP request gets a fresh instance
+        // The singleton pattern would cause state to leak between concurrent users
+        $this->app->scoped(RequestTracker::class);
     }
 
     /**

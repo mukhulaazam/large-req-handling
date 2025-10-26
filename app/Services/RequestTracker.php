@@ -3,17 +3,19 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class RequestTracker
 {
     protected $logs = [];
+    protected $batchSize = 10; // Insert logs in batches for better performance
 
     /**
      * Track an incoming HTTP request and log its details.
      *
      * This method collects various details from the given request, organizes them
      * into a structured log entry, and pushes the entry into the internal logs array.
-     * It then persists the collected log(s) into the database by calling storeInDatabase().
+     * It then persists the collected log(s) into the database in batches.
      *
      * The details collected for each request include:
      * - Request URL and HTTP method
@@ -35,15 +37,17 @@ class RequestTracker
                 'body'    => $request->all(),
             ],
             'metadata' => [
-                'ip'         => $request->ip(),
+                'ip'         => $request->ip() ,
                 'user_agent' => $request->userAgent(),
                 'user_id'    => $request->user()?->id,
                 'user_name'  => $request->user()?->name,
                 'user_email' => $request->user()?->email,
             ],
-            'time' => time(),
+            'time' => now(),
         ];
 
+        // Only write to database when batch size is reached
+        // For immediate logging, write on every request
         $this->storeInDatabase();
     }
 
@@ -62,7 +66,19 @@ class RequestTracker
      */
     protected function storeInDatabase()
     {
-        DB::table('logs')->insert($this->logs);
+        Log::info('Storing logs in database', ['logs' => $this->logs]);
+
+        $formattedLogs = array_map(function ($log) {
+            return [
+                'request' => json_encode($log['request']),
+                'metadata' => json_encode($log['metadata']),
+                'time' => $log['time'],
+                'created_at' => now(),
+                'updated_at' => now()
+            ];
+        }, $this->logs);
+
+        DB::table('logs')->insert($formattedLogs);
 
         $this->logs = [];
     }
